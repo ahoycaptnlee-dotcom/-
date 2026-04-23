@@ -260,11 +260,26 @@ export default function App() {
               drag
               dragSnapToOrigin
               onDragEnd={(_, info) => {
-                 const elements = document.elementsFromPoint(info.point.x, info.point.y);
-                 const boxElement = elements.find(el => el.getAttribute('data-box-id'));
-                 if (boxElement) {
-                   const boxId = parseInt(boxElement.getAttribute('data-box-id') || "0");
-                   if (boxId > 0) startAddingCard(trait, boxId);
+                 // getBoundingClientRect is more reliable for drop detection in iframes
+                 const dropZones = document.querySelectorAll('[data-box-id]');
+                 let boxId: string | null = null;
+
+                 for (const zone of Array.from(dropZones)) {
+                   const rect = zone.getBoundingClientRect();
+                   if (
+                     info.point.x >= rect.left &&
+                     info.point.x <= rect.right &&
+                     info.point.y >= rect.top &&
+                     info.point.y <= rect.bottom
+                   ) {
+                     boxId = zone.getAttribute('data-box-id');
+                     break;
+                   }
+                 }
+
+                 if (boxId) {
+                   const idNum = parseInt(boxId);
+                   if (idNum > 0) startAddingCard(trait, idNum);
                  }
               }}
               whileHover={{ scale: 1.05, backgroundColor: "#f8fafc" }}

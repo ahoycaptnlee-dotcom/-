@@ -48,14 +48,19 @@ async function startServer() {
     });
 
     socket.on("add-card", ({ roomId, boxId, card }) => {
-      if (roomStates[roomId]) {
+      if (!roomStates[roomId]) {
+        roomStates[roomId] = {
+          boxes: { 1: [], 2: [], 3: [], 4: [] }
+        };
+      }
+      if (roomStates[roomId].boxes[boxId]) {
         roomStates[roomId].boxes[boxId].push(card);
         io.to(roomId).emit("state-updated", roomStates[roomId]);
       }
     });
 
     socket.on("remove-card", ({ roomId, boxId, cardId }) => {
-        if (roomStates[roomId]) {
+        if (roomStates[roomId] && roomStates[roomId].boxes[boxId]) {
           roomStates[roomId].boxes[boxId] = roomStates[roomId].boxes[boxId].filter((c: any) => c.id !== cardId);
           io.to(roomId).emit("state-updated", roomStates[roomId]);
         }
