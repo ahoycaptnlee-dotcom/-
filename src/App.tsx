@@ -52,8 +52,6 @@ export default function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [roomState, setRoomState] = useState<RoomState>({ boxes: { 1: [], 2: [], 3: [], 4: [] } });
   const [categoryIndex, setCategoryIndex] = useState(0);
-  const [showReasonModal, setShowReasonModal] = useState<{ boxId: number; trait: string } | null>(null);
-  const [reasonText, setReasonText] = useState("");
   const activeCategory = PERSONALITY_CATEGORIES[categoryIndex];
 
   useEffect(() => {
@@ -96,23 +94,17 @@ export default function App() {
     setCategoryIndex((prev) => (prev - 1 + PERSONALITY_CATEGORIES.length) % PERSONALITY_CATEGORIES.length);
   };
 
-  const startAddingCard = (trait: string, boxId: number) => {
-    setShowReasonModal({ boxId, trait });
-    setReasonText("");
-  };
-
-  const confirmAddCard = () => {
-    if (!showReasonModal || !socket || !group || !character) return;
+  const addCardDirectly = (trait: string, boxId: number) => {
+    if (!socket || !group || !character) return;
     const roomId = `group-${group}-char-${character.id}`;
     const newCard: CardData = {
       id: Math.random().toString(36).substr(2, 9),
-      trait: showReasonModal.trait,
-      reason: reasonText,
+      trait: trait,
+      reason: "", // No reason needed anymore
       timestamp: Date.now(),
     };
 
-    socket.emit("add-card", { roomId, boxId: showReasonModal.boxId, card: newCard });
-    setShowReasonModal(null);
+    socket.emit("add-card", { roomId, boxId, card: newCard });
   };
 
   const removeCard = (boxId: number, cardId: string) => {
@@ -260,10 +252,11 @@ export default function App() {
               drag
               dragSnapToOrigin
               onDragEnd={(_, info) => {
-                 // getBoundingClientRect is more reliable for drop detection in iframes
+                 // Check drop targets
                  const dropZones = document.querySelectorAll('[data-box-id]');
                  let boxId: string | null = null;
 
+                 // Using point coordinates to detect collision
                  for (const zone of Array.from(dropZones)) {
                    const rect = zone.getBoundingClientRect();
                    if (
@@ -279,7 +272,7 @@ export default function App() {
 
                  if (boxId) {
                    const idNum = parseInt(boxId);
-                   if (idNum > 0) startAddingCard(trait, idNum);
+                   if (idNum > 0) addCardDirectly(trait, idNum);
                  }
               }}
               whileHover={{ scale: 1.05, backgroundColor: "#f8fafc" }}
@@ -300,11 +293,11 @@ export default function App() {
       {/* Bottom Area: Collaborative Workspace */}
       <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-4 relative">
         {/* Center Character Focus */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
           <motion.div 
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="w-44 h-44 bg-indigo-50 rounded-full border-8 border-white shadow-xl flex flex-col items-center justify-center p-4 text-center ring-4 ring-indigo-100 relative group overflow-hidden"
+            className="w-44 h-44 bg-indigo-50 rounded-full border-8 border-white shadow-xl flex flex-col items-center justify-center p-4 text-center ring-4 ring-indigo-100 relative group overflow-hidden pointer-events-auto"
           >
             <CharImage src={character?.image || ""} name={character?.name || ""} />
             <p className="font-black text-indigo-900 text-base leading-none mb-1">{character?.name}</p>
@@ -345,19 +338,16 @@ export default function App() {
                     initial={{ y: 10, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     key={card.id}
-                    className="bg-slate-50 border border-slate-200 p-3 rounded-xl relative group shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+                    className="bg-slate-50 border border-slate-200 p-2 rounded-xl relative group shadow-sm hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-center min-h-[40px]"
                   >
                     <button 
                       onClick={() => removeCard(id, card.id)}
-                      className="absolute -top-1.5 -right-1.5 bg-white text-slate-400 rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-100 hover:text-rose-500 hover:border-rose-100"
+                      className="absolute -top-1.5 -right-1.5 bg-white text-slate-400 rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-100 hover:text-rose-500 hover:border-rose-100 z-10"
                     >
-                      <X size={12} />
+                      <X size={10} />
                     </button>
-                    <p className="text-xs font-black text-indigo-600 mb-1 underline truncate pr-4">
+                    <p className="text-xs font-black text-indigo-600 truncate px-2">
                       {card.trait}
-                    </p>
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
-                      {card.reason}
                     </p>
                   </motion.div>
                 ))
@@ -374,56 +364,6 @@ export default function App() {
           다른 모둠원들이 카드를 넣으면 실시간으로 화면에 나타납니다
         </p>
       </footer>
-
-      {/* Reason Modal */}
-      <AnimatePresence>
-        {showReasonModal && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full border border-slate-200"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">왜 그렇게 생각했나요?</h3>
-                <button onClick={() => setShowReasonModal(null)} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                  <X size={24} />
-                </button>
-              </div>
-              <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-6 flex items-center gap-3">
-                <div className="w-2 h-8 bg-indigo-500 rounded-full"></div>
-                <div>
-                  <span className="text-[10px] text-indigo-400 font-black uppercase tracking-widest block mb-0.5">선택한 성격</span>
-                  <span className="text-lg font-black text-indigo-900">"{showReasonModal.trait}"</span>
-                </div>
-              </div>
-              <textarea
-                autoFocus
-                placeholder="인물의 행동이나 말을 보고 그렇게 생각한 이유를 증거로 적어보세요."
-                className="w-full h-32 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-400 focus:bg-white focus:outline-none transition-all mb-6 resize-none text-sm font-medium placeholder:italic placeholder:text-slate-300"
-                value={reasonText}
-                onChange={(e) => setReasonText(e.target.value)}
-              />
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setShowReasonModal(null)}
-                  className="flex-1 py-3 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-slate-600 transition-colors"
-                >
-                  취소하기
-                </button>
-                <button 
-                  onClick={confirmAddCard}
-                  disabled={!reasonText.trim()}
-                  className="flex-2 py-3 bg-indigo-600 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 disabled:bg-slate-100 disabled:text-slate-300 disabled:shadow-none transition-all active:scale-[0.98]"
-                >
-                  기록 추가하기
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
